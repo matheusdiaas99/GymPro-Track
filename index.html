@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GymPro Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #f8f9fa;
+            color: #333;
+            padding-top: 70px; /* Account for fixed navbar */
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .navbar-brand {
+            font-weight: bold;
+            color: #0d6efd !important;
+        }
+        .container-main {
+            max-width: 1200px;
+        }
+        .training-selector button, #historyBtn, #clearHistoryBtn, #logWorkoutBtn, .timer-controls button {
+            margin: 0.3rem;
+            transition: all 0.3s ease;
+        }
+        .training-selector button.active {
+            background-color: #0d6efd;
+            color: white;
+            border-color: #0a58ca;
+        }
+        .exercise-slot, .timer-card {
+            background-color: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            transition: box-shadow 0.3s ease;
+        }
+        .exercise-slot:hover, .timer-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .exercise-visual img {
+            max-width: 100%;
+            height: auto;
+            min-height: 150px; 
+            background-color: #f0f0f0; 
+            border-radius: 6px;
+            margin-top: 1rem;
+            border: 1px solid #ddd;
+            object-fit: contain;
+            display: block; 
+        }
+        .muscle-info {
+            font-size: 0.9em;
+            color: #555;
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
+        .history-section {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .history-entry {
+            padding: 1rem;
+            border-bottom: 1px solid #eee;
+        }
+        .history-entry:last-child {
+            border-bottom: none;
+        }
+        .history-entry strong {
+            color: #0d6efd;
+        }
+        select.form-select, input.form-control {
+            height: calc(1.5em + .75rem + 2px);
+        }
+        .exercise-inputs .form-floating > .form-control {
+            height: auto;
+        }
+        .form-check-input[type="checkbox"] {
+            transform: scale(1.2);
+            margin-left: 0.5rem;
+        }
+        #timerDisplay {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        .timer-controls button {
+            min-width: 80px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding-top: 56px; 
+            }
+            .exercise-details {
+                grid-template-columns: 1fr;
+            }
+            .exercise-slot, .timer-card {
+                padding: 1rem;
+            }
+            #timerDisplay {
+                font-size: 2rem;
+            }
+        }
+        #loadingSpinner { /* Full screen spinner */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1060; 
+        }
+        #exerciseDisplayArea .loading-message { /* Inline loading message */
+            font-style: italic;
+            font-weight: bold;
+            color: #0d6efd; /* Bootstrap primary blue */
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
+        <div class="container-fluid container-main">
+            <a class="navbar-brand" href="#">GymPro Tracker 🏋️</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item me-2">
+                        <select id="userSelector" class="form-select form-select-sm" aria-label="Select User">
+                            <option value="matheus">Matheus</option>
+                            <option value="raul">Raul</option>
+                        </select>
+                    </li>
+                    <li class="nav-item">
+                        <button id="historyBtn" class="btn btn-outline-secondary btn-sm">View History</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container container-main mt-4">
+        <div class="timer-card text-center mb-4">
+            <h3 class="mb-3">Workout Timer ⏱️</h3>
+            <div id="timerDisplay">00:00:00</div>
+            <div class="timer-controls">
+                <button id="startTimer" class="btn btn-primary">Start</button>
+                <button id="stopTimer" class="btn btn-warning" disabled>Stop</button>
+                <button id="resetTimer" class="btn btn-danger">Reset</button>
+            </div>
+        </div>
+
+        <div class="text-center mb-4 training-selector">
+            <button class="btn btn-outline-primary" data-day="A">Training A</button>
+            <button class="btn btn-outline-primary" data-day="B">Training B</button>
+            <button class="btn btn-outline-primary" data-day="C">Training C</button>
+            <button class="btn btn-outline-primary" data-day="D">Training D</button>
+        </div>
+
+        <div id="exerciseDisplayArea">
+             <p class="text-center text-muted">Select a training day to see exercises.</p>
+        </div>
+
+        <div class="text-center mt-4 mb-4">
+            <button id="logWorkoutBtn" class="btn btn-success btn-lg" style="display: none;">Log Current Workout</button>
+        </div>
+        
+        <div id="historySection" class="history-section" style="display: none;">
+            <h3 class="text-center mb-3">Workout History for <span id="historyUserName"></span></h3>
+            <div id="historyList">
+            </div>
+            <div class="text-center mt-3">
+                <button id="clearHistoryBtn" class="btn btn-danger">Clear History for <span id="clearHistoryUserName"></span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loadingSpinner" class="d-none">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script>
+        // --- DATABASE ---
+        // IMPORTANT: Training A has new image URLs (attempted anatomical illustration style). 
+        // Trainings B, C, D still use general placeholders.
+        // You will need to find/replace these with your desired exercise images/illustrations.
+        // Public image URLs can change or be removed. For production, host your own assets.
+        const exerciseDatabase = {
+            'A': [ 
+                {
+                    slotName: "Back - Vertical Pull",
+                    options: [
+                        { id: "a1_opt1", name: "Pull-ups", primaryMuscle: "Back", specificPart: "Latissimus Dorsi, Rhomboids, Biceps", visual: "https://upload.wikimedia.org/wikipedia/commons/3/33/Pullupsmuscles.png", sets: "3-4", reps: "AMRAP or 6-10" },
+                        { id: "a1_opt2", name: "Lat Pulldowns (Wide Grip)", primaryMuscle: "Back", specificPart: "Latissimus Dorsi", visual: "https://hips.hearstapps.com/hmg-prod/images/workouts/2017/07/latpulldown-1499440387.jpg?resize=*:200", sets: "3-4", reps: "8-12" } // More realistic, anatomical hard to find for specific grip
+                    ]
+                },
+                {
+                    slotName: "Back - Horizontal Pull",
+                    options: [
+                        { id: "a2_opt1", name: "Barbell Rows", primaryMuscle: "Back", specificPart: "Lats, Rhomboids, Traps, Lower Back", visual: "https://i.pinimg.com/originals/07/04/29/0704298977b3679b613372f9f27976a2.png", sets: "3-4", reps: "6-10" },
+                        { id: "a2_opt2", name: "Dumbbell Rows (Single Arm)", primaryMuscle: "Back", specificPart: "Lats, Rhomboids, Traps", visual: "https://www.verywellfit.com/thmb/vV0Qr2a2p12_Zz3f1zV8q48xTzY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Verywell-02-2562480-DumbbellRow01-1568-598b65503df78c690f657482.jpg", sets: "3-4", reps: "8-12 per arm" } // More realistic
+                    ]
+                },
+                {
+                    slotName: "Back - Isolation/Accessory",
+                    options: [
+                        { id: "a3_opt1", name: "Seated Cable Rows", primaryMuscle: "Back", specificPart: "Mid-Back, Lats", visual: "https://www.verywellfit.com/thmb/iYF3L2yT2Yh7qX9Hn7t2W4oF3nI=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Verywell-02-3498284-SeatedCableRow01-1801-598b660c3df78c690f65a102.jpg", sets: "3", reps: "10-15" }, // More realistic
+                        { id: "a3_opt2", name: "Face Pulls", primaryMuscle: "Upper Back / Shoulders", specificPart: "Rear Deltoids, Rhomboids, Traps", visual: "https://www.bodybuilding.com/images/2017/may/face-pulls-muscles-worked-and-proper-form-v2-MUSCLEPHARM-1-1600x900.jpg", sets: "3-4", reps: "12-20" } // Muscle overlay style
+                    ]
+                },
+                {
+                    slotName: "Biceps - Compound Curl",
+                    options: [
+                        { id: "a4_opt1", name: "Barbell Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii", visual: "https://weighttraining.guide/wp-content/uploads/2016/10/Barbell-Curl-resized.png", sets: "3-4", reps: "8-12" },
+                        { id: "a4_opt2", name: "Standing Dumbbell Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii, Brachialis", visual: "https://weighttraining.guide/wp-content/uploads/2016/11/Dumbbell-Alternate-Biceps-Curl-resized.png", sets: "3-4", reps: "8-12 per arm" }
+                    ]
+                },
+                {
+                    slotName: "Biceps - Isolation Curl",
+                    options: [
+                        { id: "a5_opt1", name: "Dumbbell Hammer Curls", primaryMuscle: "Biceps / Forearms", specificPart: "Brachialis, Brachioradialis", visual: "https://weighttraining.guide/wp-content/uploads/2016/11/Dumbbell-Hammer-Curl-resized.png", sets: "3", reps: "10-15 per arm" },
+                        { id: "a5_opt2", name: "Concentration Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii (Peak)", visual: "https://weighttraining.guide/wp-content/uploads/2016/11/Dumbbell-Concentration-Curl-resized.png", sets: "3", reps: "10-12 per arm" }
+                    ]
+                },
+                {
+                    slotName: "Abs - Flexion",
+                    options: [
+                        { id: "a6_opt1", name: "Crunches", primaryMuscle: "Abs", specificPart: "Rectus Abdominis (Upper)", visual: "https://www.verywellfit.com/thmb/jWho0hS40sNtKio3L3Gw5Ra7VXA=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/95-3120031-CrunchesGIF-05939410923949889e681f3667332f56.jpg", sets: "3-4", reps: "15-25" }, // Realistic image, good diagrams are harder
+                        { id: "a6_opt2", name: "Hanging Leg Raises", primaryMuscle: "Abs", specificPart: "Rectus Abdominis (Lower), Hip Flexors", visual: "https://www.inspireusafoundation.org/wp-content/uploads/2022/08/hanging-leg-raise-anatomy.png", sets: "3-4", reps: "10-20" }
+                    ]
+                },
+                 {
+                    slotName: "Abs - Stability/Rotation",
+                    options: [
+                        { id: "a7_opt1", name: "Plank", primaryMuscle: "Core", specificPart: "Transverse Abdominis, Rectus Abdominis, Obliques", visual: "https://www.verywellfit.com/thmb/gMo0hA5V0ak30b0cWTCH4xlp92M=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/About-2A19-Plank-953-b79f27c8898a454a9eee580fd8df4106.jpg", sets: "3", reps: "Hold for 30-60s" }, // Realistic
+                        { id: "a7_opt2", name: "Russian Twists", primaryMuscle: "Obliques", specificPart: "Internal & External Obliques", visual: "https://www.spotebi.com/wp-content/uploads/2015/01/russian-twist-exercise-illustration.jpg", sets: "3", reps: "15-20 per side" }
+                    ]
+                }
+            ],
+            'B': [ { slotName: "Chest - Primary Press", options: [ { id: "b1_opt1", name: "Barbell Bench Press", primaryMuscle: "Chest", specificPart: "Pectoralis Major, Anterior Deltoids, Triceps", visual: "https://via.placeholder.com/300x200.png?text=Bench+Press+Anatomical+Illustration", sets: "3-4", reps: "6-10" }, { id: "b1_opt2", name: "Dumbbell Bench Press", primaryMuscle: "Chest", specificPart: "Pectoralis Major, Anterior Deltoids, Triceps", visual: "https://via.placeholder.com/300x200.png?text=DB+Bench+Press+Anatomical+Illustration", sets: "3-4", reps: "8-12" } ] }, { slotName: "Chest - Incline Press", options: [ { id: "b2_opt1", name: "Incline Dumbbell Press", primaryMuscle: "Chest", specificPart: "Upper Pectoralis Major, Anterior Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Incline+DB+Press+Anatomical+Illustration", sets: "3-4", reps: "8-12" }, { id: "b2_opt2", name: "Incline Barbell Press", primaryMuscle: "Chest", specificPart: "Upper Pectoralis Major, Anterior Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Incline+Barbell+Press+Anatomical+Illustration", sets: "3-4", reps: "8-10" } ] }, { slotName: "Chest - Flyes/Isolation", options: [ { id: "b3_opt1", name: "Dumbbell Flyes", primaryMuscle: "Chest", specificPart: "Pectoralis Major", visual: "https://via.placeholder.com/300x200.png?text=Dumbbell+Flyes+Anatomical+Illustration", sets: "3", reps: "10-15" }, { id: "b3_opt2", name: "Cable Crossovers", primaryMuscle: "Chest", specificPart: "Pectoralis Major (Varies with angle)", visual: "https://via.placeholder.com/300x200.png?text=Cable+Crossover+Anatomical+Illustration", sets: "3", reps: "12-15" } ] }, { slotName: "Shoulders - Overhead Press", options: [ { id: "b4_opt1", name: "Overhead Press (Barbell)", primaryMuscle: "Shoulders", specificPart: "Anterior & Medial Deltoids, Triceps", visual: "https://via.placeholder.com/300x200.png?text=Overhead+Press+Anatomical+Illustration", sets: "3-4", reps: "6-10" }, { id: "b4_opt2", name: "Dumbbell Shoulder Press", primaryMuscle: "Shoulders", specificPart: "Anterior & Medial Deltoids, Triceps", visual: "https://via.placeholder.com/300x200.png?text=DB+Shoulder+Press+Anatomical+Illustration", sets: "3-4", reps: "8-12" } ] }, { slotName: "Shoulders - Lateral Raise", options: [ { id: "b5_opt1", name: "Dumbbell Lateral Raises", primaryMuscle: "Shoulders", specificPart: "Medial Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Lateral+Raises+Anatomical+Illustration", sets: "3-4", reps: "12-20" }, { id: "b5_opt2", name: "Cable Lateral Raises", primaryMuscle: "Shoulders", specificPart: "Medial Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Cable+Lateral+Raise+Anatomical+Illustration", sets: "3-4", reps: "12-15 per arm" } ] }, { slotName: "Triceps - Compound Extension", options: [ { id: "b6_opt1", name: "Close-Grip Bench Press", primaryMuscle: "Triceps", specificPart: "All Triceps Heads, Inner Chest", visual: "https://via.placeholder.com/300x200.png?text=Close-Grip+Bench+Anatomical+Illustration", sets: "3-4", reps: "8-12" }, { id: "b6_opt2", name: "Dips (Triceps Focus)", primaryMuscle: "Triceps", specificPart: "All Triceps Heads, Lower Chest", visual: "https://via.placeholder.com/300x200.png?text=Triceps+Dips+Anatomical+Illustration", sets: "3-4", reps: "AMRAP or 8-15" } ] }, { slotName: "Triceps - Isolation (Long Head)", options: [ { id: "b7_opt1", name: "Overhead Dumbbell Extension", primaryMuscle: "Triceps", specificPart: "Long Head", visual: "https://via.placeholder.com/300x200.png?text=Overhead+DB+Ext+Anatomical+Illustration", sets: "3", reps: "10-15" }, { id: "b7_opt2", name: "Skullcrushers (EZ Bar)", primaryMuscle: "Triceps", specificPart: "Long & Lateral Heads", visual: "https://via.placeholder.com/300x200.png?text=Skullcrushers+Anatomical+Illustration", sets: "3", reps: "10-12" } ] }, { slotName: "Triceps - Pushdown", options: [ { id: "b8_opt1", name: "Triceps Pushdowns (Rope)", primaryMuscle: "Triceps", specificPart: "Lateral & Medial Heads", visual: "https://via.placeholder.com/300x200.png?text=Triceps+Pushdown+Rope+Anatomical+Illustration", sets: "3-4", reps: "10-15" }, { id: "b8_opt2", name: "Triceps Pushdowns (Straight Bar)", primaryMuscle: "Triceps", specificPart: "Lateral & Medial Heads", visual: "https://via.placeholder.com/300x200.png?text=Triceps+Pushdown+Bar+Anatomical+Illustration", sets: "3", reps: "10-15" } ] } ],
+            'C': [ { slotName: "Legs - Squat Variation", options: [ { id: "c1_opt1", name: "Barbell Back Squats", primaryMuscle: "Legs", specificPart: "Quads, Glutes, Hamstrings", visual: "https://via.placeholder.com/300x200.png?text=Barbell+Squat+Anatomical+Illustration", sets: "3-5", reps: "5-10" }, { id: "c1_opt2", name: "Leg Press", primaryMuscle: "Legs", specificPart: "Quads, Glutes", visual: "https://via.placeholder.com/300x200.png?text=Leg+Press+Anatomical+Illustration", sets: "3-4", reps: "8-15" } ] }, { slotName: "Legs - Hinge Variation", options: [ { id: "c2_opt1", name: "Romanian Deadlifts (RDLs)", primaryMuscle: "Hamstrings / Glutes", specificPart: "Hamstrings, Glutes, Erector Spinae", visual: "https://via.placeholder.com/300x200.png?text=RDL+Anatomical+Illustration", sets: "3-4", reps: "8-12" }, { id: "c2_opt2", name: "Good Mornings", primaryMuscle: "Hamstrings / Glutes", specificPart: "Hamstrings, Glutes, Erector Spinae", visual: "https://via.placeholder.com/300x200.png?text=Good+Mornings+Anatomical+Illustration", sets: "3", reps: "10-15" } ] }, { slotName: "Legs - Unilateral", options: [ { id: "c3_opt1", name: "Bulgarian Split Squats", primaryMuscle: "Legs", specificPart: "Quads, Glutes", visual: "https://via.placeholder.com/300x200.png?text=Bulgarian+Split+Squat+Anatomical+Illustration", sets: "3", reps: "8-12 per leg" }, { id: "c3_opt2", name: "Walking Lunges", primaryMuscle: "Legs", specificPart: "Quads, Glutes, Hamstrings", visual: "https://via.placeholder.com/300x200.png?text=Walking+Lunges+Anatomical+Illustration", sets: "3", reps: "10-15 per leg" } ] }, { slotName: "Legs - Quad Isolation", options: [ { id: "c4_opt1", name: "Leg Extensions", primaryMuscle: "Quadriceps", specificPart: "Rectus Femoris, Vastus Muscles", visual: "https://via.placeholder.com/300x200.png?text=Leg+Extensions+Anatomical+Illustration", sets: "3", reps: "12-20" }, { id: "c4_opt2", name: "Hack Squats", primaryMuscle: "Quadriceps", specificPart: "Vastus Medialis, Overall Quads", visual: "https://via.placeholder.com/300x200.png?text=Hack+Squat+Anatomical+Illustration", sets: "3-4", reps: "10-15" } ] }, { slotName: "Legs - Hamstring Isolation", options: [ { id: "c5_opt1", name: "Lying Leg Curls", primaryMuscle: "Hamstrings", specificPart: "Biceps Femoris, Semitendinosus, Semimembranosus", visual: "https://via.placeholder.com/300x200.png?text=Lying+Leg+Curl+Anatomical+Illustration", sets: "3", reps: "12-20" }, { id: "c5_opt2", name: "Seated Leg Curls", primaryMuscle: "Hamstrings", specificPart: "Hamstrings", visual: "https://via.placeholder.com/300x200.png?text=Seated+Leg+Curl+Anatomical+Illustration", sets: "3", reps: "12-15" } ] }, { slotName: "Calves", options: [ { id: "c6_opt1", name: "Standing Calf Raises", primaryMuscle: "Calves", specificPart: "Gastrocnemius", visual: "https://via.placeholder.com/300x200.png?text=Standing+Calf+Raise+Anatomical+Illustration", sets: "4-5", reps: "10-20" }, { id: "c6_opt2", name: "Seated Calf Raises", primaryMuscle: "Calves", specificPart: "Soleus", visual: "https://via.placeholder.com/300x200.png?text=Seated+Calf+Raise+Anatomical+Illustration", sets: "4-5", reps: "15-25" } ] }, { slotName: "Abs - Weighted", options: [ { id: "c7_opt1", name: "Cable Crunches", primaryMuscle: "Abs", specificPart: "Rectus Abdominis", visual: "https://via.placeholder.com/300x200.png?text=Cable+Crunches+Anatomical+Illustration", sets: "3-4", reps: "12-20" }, { id: "c7_opt2", name: "Decline Weighted Sit-ups", primaryMuscle: "Abs", specificPart: "Rectus Abdominis, Hip Flexors", visual: "https://via.placeholder.com/300x200.png?text=Decline+Situps+Anatomical+Illustration", sets: "3-4", reps: "10-15" } ] }, { slotName: "Abs - Anti-Extension/Rotation", options: [ { id: "c8_opt1", name: "Ab Wheel Rollouts", primaryMuscle: "Core", specificPart: "Rectus Abdominis, Transverse Abdominis", visual: "https://via.placeholder.com/300x200.png?text=Ab+Wheel+Anatomical+Illustration", sets: "3-4", reps: "8-15" }, { id: "c8_opt2", name: "Woodchoppers (Cable)", primaryMuscle: "Obliques", specificPart: "Internal & External Obliques", visual: "https://via.placeholder.com/300x200.png?text=Woodchoppers+Anatomical+Illustration", sets: "3", reps: "10-15 per side"} ] } ],
+            'D': [ { slotName: "Weak Point 1 (e.g., Upper Chest)", options: [ { id: "d1_opt1", name: "Incline Dumbbell Flyes", primaryMuscle: "Chest", specificPart: "Upper Pectoralis Major", visual: "https://via.placeholder.com/300x200.png?text=Incline+DB+Flyes+Anatomical+Illustration", sets: "3-4", reps: "10-15" }, { id: "d1_opt2", name: "Landmine Press (Upper Chest Focus)", primaryMuscle: "Chest / Shoulders", specificPart: "Upper Pectoralis Major, Anterior Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Landmine+Press+Anatomical+Illustration", sets: "3-4", reps: "10-15 per arm" } ] }, { slotName: "Weak Point 2 (e.g., Rear Delts)", options: [ { id: "d2_opt1", name: "Bent-Over Dumbbell Raises", primaryMuscle: "Shoulders", specificPart: "Posterior Deltoids", visual: "https://via.placeholder.com/300x200.png?text=Bent-Over+DB+Raise+Anatomical+Illustration", sets: "3-4", reps: "12-20" }, { id: "d2_opt2", name: "Reverse Pec Deck", primaryMuscle: "Shoulders / Upper Back", specificPart: "Posterior Deltoids, Rhomboids", visual: "https://via.placeholder.com/300x200.png?text=Reverse+Pec+Deck+Anatomical+Illustration", sets: "3-4", reps: "12-15" } ] }, { slotName: "Biceps - Peak Focus", options: [ { id: "d3_opt1", name: "Preacher Curls (EZ Bar)", primaryMuscle: "Biceps", specificPart: "Biceps Brachii (Short Head)", visual: "https://via.placeholder.com/300x200.png?text=Preacher+Curl+Anatomical+Illustration", sets: "3-4", reps: "10-15" }, { id: "d3_opt2", name: "Spider Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii (Short Head)", visual: "https://via.placeholder.com/300x200.png?text=Spider+Curl+Anatomical+Illustration", sets: "3-4", reps: "12-15" } ] }, { slotName: "Biceps - Overall Mass / Stretch", options: [ { id: "d4_opt1", name: "Incline Dumbbell Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii (Long Head - Stretch)", visual: "https://via.placeholder.com/300x200.png?text=Incline+DB+Curl+Anatomical+Illustration", sets: "3-4", reps: "10-12" }, { id: "d4_opt2", name: "Drag Curls", primaryMuscle: "Biceps", specificPart: "Biceps Brachii (Squeeze)", visual: "https://via.placeholder.com/300x200.png?text=Drag+Curl+Anatomical+Illustration", sets: "3-4", reps: "12-15" } ] }, { slotName: "Triceps - Long Head (Stretch)", options: [ { id: "d5_opt1", name: "Overhead Cable Rope Extensions", primaryMuscle: "Triceps", specificPart: "Long Head", visual: "https://via.placeholder.com/300x200.png?text=Overhead+Rope+Ext+Anatomical+Illustration", sets: "3-4", reps: "10-15" }, { id: "d5_opt2", name: "Lying Dumbbell Triceps Extensions", primaryMuscle: "Triceps", specificPart: "Long & Lateral Heads", visual: "https://via.placeholder.com/300x200.png?text=Lying+DB+Triceps+Ext+Anatomical+Illustration", sets: "3-4", reps: "10-12" } ] }, { slotName: "Triceps - Lateral/Medial Head", options: [ { id: "d6_opt1", name: "Cable Kickbacks", primaryMuscle: "Triceps", specificPart: "Lateral Head", visual: "https://via.placeholder.com/300x200.png?text=Cable+Kickbacks+Anatomical+Illustration", sets: "3-4", reps: "12-15 per arm" }, { id: "d6_opt2", name: "Diamond Push-ups", primaryMuscle: "Triceps / Chest", specificPart: "All Triceps Heads, Inner Chest", visual: "https://via.placeholder.com/300x200.png?text=Diamond+Pushups+Anatomical+Illustration", sets: "3-4", reps: "AMRAP or 10-20" } ] }, { slotName: "Forearms / Grip", options: [ { id: "d7_opt1", name: "Barbell Wrist Curls", primaryMuscle: "Forearms", specificPart: "Wrist Flexors", visual: "https://via.placeholder.com/300x200.png?text=Wrist+Curls+Anatomical+Illustration", sets: "3", reps: "15-25" }, { id: "d7_opt2", name: "Reverse Barbell Wrist Curls", primaryMuscle: "Forearms", specificPart: "Wrist Extensors", visual: "https://via.placeholder.com/300x200.png?text=Reverse+Wrist+Curls+Anatomical+Illustration", sets: "3", reps: "15-25" } ] } ]
+        };
+
+        let currentUser = 'matheus'; 
+        let currentTrainingDay = null;
+        let timerInterval;
+        let totalSeconds = 0;
+
+        const users = [ { id: 'matheus', name: 'Matheus' }, { id: 'raul', name: 'Raul' } ];
+        const userSelector = document.getElementById('userSelector');
+        const trainingDayButtons = document.querySelectorAll('.training-selector button');
+        const exerciseDisplayArea = document.getElementById('exerciseDisplayArea');
+        const logWorkoutBtn = document.getElementById('logWorkoutBtn');
+        const historyBtn = document.getElementById('historyBtn');
+        const historySection = document.getElementById('historySection');
+        const historyList = document.getElementById('historyList');
+        const historyUserName = document.getElementById('historyUserName');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+        const clearHistoryUserName = document.getElementById('clearHistoryUserName');
+        const loadingSpinner = document.getElementById('loadingSpinner'); 
+        const timerDisplay = document.getElementById('timerDisplay');
+        const startTimerBtn = document.getElementById('startTimer');
+        const stopTimerBtn = document.getElementById('stopTimer');
+        const resetTimerBtn = document.getElementById('resetTimer');
+
+        function showFullScreenSpinner() { loadingSpinner.classList.remove('d-none'); }
+        function hideFullScreenSpinner() { loadingSpinner.classList.add('d-none'); }
+
+        function initApp() {
+            showFullScreenSpinner();
+            userSelector.innerHTML = users.map(user => `<option value="${user.id}">${user.name}</option>`).join('');
+            currentUser = userSelector.value; 
+            updateUserSpecificElements();
+            renderHistory(); 
+            setupEventListeners();
+            hideFullScreenSpinner();
+        }
+
+        function updateUserSpecificElements() {
+            historyUserName.textContent = users.find(u => u.id === currentUser).name;
+            clearHistoryUserName.textContent = users.find(u => u.id === currentUser).name;
+        }
+
+        function setupEventListeners() {
+            userSelector.addEventListener('change', (e) => {
+                currentUser = e.target.value;
+                updateUserSpecificElements();
+                renderHistory(); 
+                exerciseDisplayArea.innerHTML = '<p class="text-center text-muted">Select a training day to see exercises.</p>';
+                logWorkoutBtn.style.display = 'none';
+                currentTrainingDay = null;
+                trainingDayButtons.forEach(btn => btn.classList.remove('active'));
+                resetTimer(); 
+            });
+
+            trainingDayButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    showFullScreenSpinner(); 
+                    currentTrainingDay = button.getAttribute('data-day');
+                    trainingDayButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    displayExercisesForDay(currentTrainingDay); 
+                    logWorkoutBtn.style.display = 'block';
+                    historySection.style.display = 'none'; 
+                    resetTimer(); 
+                });
+            });
+
+            logWorkoutBtn.addEventListener('click', logWorkout);
+            historyBtn.addEventListener('click', toggleHistoryView);
+            clearHistoryBtn.addEventListener('click', clearCurrentUserHistory);
+            startTimerBtn.addEventListener('click', startTimer);
+            stopTimerBtn.addEventListener('click', stopTimer);
+            resetTimerBtn.addEventListener('click', resetTimer);
+        }
+
+        function startTimer() {
+            if (timerInterval) return; 
+            timerInterval = setInterval(() => {
+                totalSeconds++;
+                updateTimerDisplay();
+            }, 1000);
+            startTimerBtn.disabled = true;
+            stopTimerBtn.disabled = false;
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+            timerInterval = null;
+            startTimerBtn.disabled = false;
+            stopTimerBtn.disabled = totalSeconds === 0;
+        }
+
+        function resetTimer() {
+            stopTimer(); 
+            totalSeconds = 0;
+            updateTimerDisplay();
+            startTimerBtn.disabled = false;
+            stopTimerBtn.disabled = true; 
+        }
+
+        function updateTimerDisplay() {
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            timerDisplay.textContent = 
+                `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function displayExercisesForDay(dayKey) {
+            exerciseDisplayArea.innerHTML = `<p class="text-center loading-message">Loading exercises, please wait...</p>`;
+            setTimeout(() => {
+                try {
+                    const exercises = exerciseDatabase[dayKey];
+                    if (!exercises) {
+                        exerciseDisplayArea.innerHTML = '<p class="text-center text-danger">No exercises found for this day.</p>';
+                        hideFullScreenSpinner();
+                        return;
+                    }
+                    let html = `<h3 class="text-center mb-4">Training ${dayKey}: ${getTrainingDayTitle(dayKey)}</h3>`;
+                    exercises.forEach((slot, index) => {
+                        const slotId = `${dayKey}_slot${index}`;
+                        html += `
+                            <div class="exercise-slot" id="${slotId}">
+                                <h5 class="mb-3">${slot.slotName}</h5>
+                                <div class="row align-items-start">
+                                    <div class="col-md-7">
+                                        <div class="mb-3">
+                                            <label for="select_${slotId}" class="form-label">Choose Exercise:</label>
+                                            <select class="form-select exercise-option-select" id="select_${slotId}" data-slot-id="${slotId}">
+                                                ${slot.options.map(opt => `<option value="${opt.id}">${opt.name}</option>`).join('')}
+                                            </select>
+                                        </div>
+                                        <div class="exercise-inputs row g-2 mb-3">
+                                            <div class="col-sm form-floating"><input type="text" class="form-control" id="sets_${slotId}" placeholder="Sets" value="${slot.options[0].sets}"><label for="sets_${slotId}">Sets</label></div>
+                                            <div class="col-sm form-floating"><input type="text" class="form-control" id="reps_${slotId}" placeholder="Reps" value="${slot.options[0].reps}"><label for="reps_${slotId}">Reps</label></div>
+                                            <div class="col-sm form-floating"><input type="text" class="form-control" id="weight_${slotId}" placeholder="Weight (kg/lbs)"><label for="weight_${slotId}">Weight</label></div>
+                                        </div>
+                                        <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="done_${slotId}" checked><label class="form-check-label" for="done_${slotId}">Include in Log</label></div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="exercise-visual text-center" id="visual_${slotId}"><img src="${slot.options[0].visual}" alt="${slot.options[0].name} illustration" onerror="this.style.display='none';"></div>
+                                        <div class="muscle-info mt-2" id="info_${slotId}"><strong>Primary Muscle:</strong> ${slot.options[0].primaryMuscle} <br><strong>Specific Part:</strong> ${slot.options[0].specificPart}</div>
+                                    </div>
+                                </div>
+                            </div>`;
+                    });
+                    exerciseDisplayArea.innerHTML = html;
+                    document.querySelectorAll('.exercise-option-select').forEach(select => {
+                        select.addEventListener('change', (e) => {
+                            const selectedOptionId = e.target.value;
+                            const slotId = e.target.getAttribute('data-slot-id');
+                            const day = slotId.split('_')[0];
+                            const slotIndex = parseInt(slotId.split('slot')[1]);
+                            const selectedExerciseDetail = exerciseDatabase[day][slotIndex].options.find(opt => opt.id === selectedOptionId);
+                            if (selectedExerciseDetail) {
+                                const visualImg = document.querySelector(`#visual_${slotId} img`);
+                                visualImg.src = selectedExerciseDetail.visual;
+                                visualImg.alt = selectedExerciseDetail.name + " illustration";
+                                visualImg.style.display = 'block';
+                                document.getElementById(`info_${slotId}`).innerHTML = `<strong>Primary Muscle:</strong> ${selectedExerciseDetail.primaryMuscle} <br><strong>Specific Part:</strong> ${selectedExerciseDetail.specificPart}`;
+                                document.getElementById(`sets_${slotId}`).value = selectedExerciseDetail.sets || '';
+                                document.getElementById(`reps_${slotId}`).value = selectedExerciseDetail.reps || '';
+                            }
+                        });
+                    });
+                } catch (error) {
+                    console.error("Error displaying exercises:", error);
+                    exerciseDisplayArea.innerHTML = '<p class="text-center text-danger">Could not load exercises due to an error. Please try refreshing or selecting another day.</p>';
+                } finally {
+                    hideFullScreenSpinner(); 
+                }
+            }, 50); 
+        }
+        
+        function getTrainingDayTitle(dayKey) {
+            switch(dayKey) {
+                case 'A': return 'Back, Biceps, and Abs';
+                case 'B': return 'Chest, Triceps, and Shoulders';
+                case 'C': return 'Legs and Abs';
+                case 'D': return 'Weak Points + Arms';
+                default: return 'Unknown Training';
+            }
+        }
+
+        function logWorkout() {
+            showFullScreenSpinner();
+            if (!currentTrainingDay) {
+                alert("Please select a training day first.");
+                hideFullScreenSpinner();
+                return;
+            }
+            const loggedExercises = [];
+            const exerciseSlots = document.querySelectorAll('.exercise-slot');
+            exerciseSlots.forEach(slotDiv => {
+                const slotId = slotDiv.id;
+                const includeCheckbox = document.getElementById(`done_${slotId}`);
+                if (includeCheckbox && !includeCheckbox.checked) { return; }
+                const selectedOptionId = document.getElementById(`select_${slotId}`).value;
+                const day = slotId.split('_')[0];
+                const slotIndex = parseInt(slotId.split('slot')[1]);
+                const exerciseDetail = exerciseDatabase[day][slotIndex].options.find(opt => opt.id === selectedOptionId);
+                if (exerciseDetail) {
+                    loggedExercises.push({
+                        slotName: exerciseDatabase[day][slotIndex].slotName,
+                        exerciseName: exerciseDetail.name,
+                        sets: document.getElementById(`sets_${slotId}`).value || 'N/A',
+                        reps: document.getElementById(`reps_${slotId}`).value || 'N/A',
+                        weight: document.getElementById(`weight_${slotId}`).value || 'N/A'
+                    });
+                }
+            });
+
+            if (loggedExercises.length === 0) {
+                alert("No exercises selected or included in the log. Please check the 'Include in Log' boxes.");
+                hideFullScreenSpinner();
+                return;
+            }
+            
+            stopTimer(); 
+            const workoutDuration = timerDisplay.textContent;
+
+            const workoutLog = {
+                date: new Date().toISOString(),
+                trainingDay: currentTrainingDay,
+                trainingTitle: getTrainingDayTitle(currentTrainingDay),
+                duration: workoutDuration,
+                exercises: loggedExercises
+            };
+
+            let history = JSON.parse(localStorage.getItem('gymProWorkoutHistory')) || {};
+            if (!history[currentUser]) { history[currentUser] = []; }
+            history[currentUser].unshift(workoutLog); 
+            localStorage.setItem('gymProWorkoutHistory', JSON.stringify(history));
+
+            renderHistory();
+            alert('Workout logged successfully! 🎉');
+            hideFullScreenSpinner();
+            historySection.style.display = 'block'; 
+        }
+
+        function renderHistory() {
+            const historyData = JSON.parse(localStorage.getItem('gymProWorkoutHistory')) || {};
+            const userHistory = historyData[currentUser] || [];
+            if (userHistory.length === 0) {
+                historyList.innerHTML = '<p class="text-center text-muted">No workouts logged yet.</p>';
+                return;
+            }
+            let html = '';
+            userHistory.forEach(log => {
+                html += `
+                    <div class="history-entry">
+                        <p class="mb-1"><strong>Date:</strong> ${new Date(log.date).toLocaleDateString()} at ${new Date(log.date).toLocaleTimeString()}</p>
+                        <p class="mb-1"><strong>Training:</strong> ${log.trainingDay} - ${log.trainingTitle}</p>
+                        <p class="mb-1"><strong>Duration:</strong> ${log.duration || 'N/A'}</p>
+                        <ul class="list-group list-group-flush">
+                            ${log.exercises.map(ex => `<li class="list-group-item py-1">${ex.slotName}: ${ex.exerciseName} (Sets: ${ex.sets}, Reps: ${ex.reps}, Weight: ${ex.weight})</li>`).join('')}
+                        </ul>
+                    </div>`;
+            });
+            historyList.innerHTML = html;
+        }
+
+        function toggleHistoryView() {
+            if (historySection.style.display === 'none' || historySection.style.display === '') {
+                showFullScreenSpinner();
+                renderHistory(); 
+                historySection.style.display = 'block';
+                historyBtn.textContent = 'Hide History';
+                historyBtn.classList.remove('btn-outline-secondary');
+                historyBtn.classList.add('btn-secondary');
+                historySection.scrollIntoView({ behavior: 'smooth' });
+                hideFullScreenSpinner();
+            } else {
+                historySection.style.display = 'none';
+                historyBtn.textContent = 'View History';
+                historyBtn.classList.remove('btn-secondary');
+                historyBtn.classList.add('btn-outline-secondary');
+            }
+        }
+
+        function clearCurrentUserHistory() {
+            if (confirm(`Are you sure you want to clear all workout history for ${users.find(u => u.id === currentUser).name}? This action cannot be undone.`)) {
+                showFullScreenSpinner();
+                let history = JSON.parse(localStorage.getItem('gymProWorkoutHistory')) || {};
+                if (history[currentUser]) {
+                    history[currentUser] = [];
+                    localStorage.setItem('gymProWorkoutHistory', JSON.stringify(history));
+                }
+                renderHistory(); 
+                hideFullScreenSpinner();
+                alert('History cleared.');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
